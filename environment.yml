@@ -1,0 +1,14 @@
+name: loan-calculator
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - pip=20.2.2
+  - python=3.8.5
+  - black=19.
+  - flake8=3.9.2
+  - mypy=0.812
+  - pip:
+    - pandas==1.1.1
+    - pre-commit==2.9.0
+    - pre-commit-hooks==3.1.0

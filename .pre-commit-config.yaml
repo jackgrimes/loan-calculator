@@ -1,0 +1,33 @@
+repos:
+-   repo: local
+    hooks:
+      - id: black
+        name: black
+        entry: black
+        description: Code reformatting
+        language: system
+        types: [python]
+      - id: flake8
+        name: flake8
+        entry: flake8
+        description: Checking code base against PEP8
+        language: system
+        types: [python]
+      - id: mypy
+        name: mypy
+        entry: mypy
+        description: Static type checker for Python
+        language: system
+        types: [python]
+        args: [--no-strict-optional, --ignore-missing-imports]
+#-   repo: https://github.com/pycqa/isort
+#    rev: 5.8.0
+#    hooks:
+#      - id: isort
+#        name: isort (python)
+#      - id: isort
+#        name: isort (cython)
+#        types: [cython]
+#      - id: isort
+#        name: isort (pyi)
+#        types: [pyi]
