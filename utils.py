@@ -96,7 +96,11 @@ def compare_my_interest_estimates_with_reported(
 
 
 def calculate_balances_and_interest_added(
-    df, applying_logic_from_letter, assume_pay, assumptions_string
+    events,
+    interest_rates,
+    payments_divided_equally_over_tax_year,
+    assume_payment_made_day_of_month,
+    assumptions_string,
 ):
 
     start_balance = 0

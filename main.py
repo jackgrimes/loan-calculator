@@ -9,7 +9,7 @@ from utils import (
 
 
 def loan_calculator_runner():
-    events, interest, reported_interest_added = get_and_prep_data()
+    events, interest_rates, reported_interest_added = get_and_prep_data()
 
     # Try all the combinations of assumptions:
     # 1. getting paid on first day of the month, pay over the tax year being averaged
@@ -25,7 +25,7 @@ def loan_calculator_runner():
                 + str(assume_payment_made_day_of_month)
             )
             _ = calculate_balances_and_interest_added(
-                # df,
+                events, interest_rates,
                 payments_divided_equally_over_tax_year,
                 assume_payment_made_day_of_month,
                 assumptions_string,
