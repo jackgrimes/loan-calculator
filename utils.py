@@ -1,10 +1,9 @@
 import os
-from calendar import monthrange
 from datetime import date
 
 import pandas as pd
 
-from configs import data_path, months_dict
+from configs import data_path
 
 
 def get_days(year):
@@ -17,82 +16,35 @@ def get_and_prep_data():
     # Read in and clean up data
 
     events = pd.read_csv(
-        os.path.join(data_path, "loan_events.csv"), parse_dates=["date"]
+        os.path.join(data_path, "loan_events.csv"),
+        dayfirst=True,
+        parse_dates=True,
+        index_col=["date"],
     )
-    events.set_index("date", inplace=True)
 
     interest_rates = pd.read_csv(
-        os.path.join(data_path, "interest_rates.csv"), parse_dates=["date"]
+        os.path.join(data_path, "interest_rates.csv"),
+        parse_dates=True,
+        index_col=["date"],
     )
-    interest_rates.set_index("date", inplace=True)
 
     reported_interest_added = pd.read_csv(
-        os.path.join(data_path, "reported_interest_added.csv"), parse_dates=["date"]
+        os.path.join(data_path, "reported_interest_added.csv"),
+        parse_dates=True,
+        index_col=["date"],
+        dayfirst=True,
     )
-    reported_interest_added.set_index("date", inplace=True)
 
     return events, interest_rates, reported_interest_added
 
 
-def compare_my_interest_estimates_with_reported(
-    all_results, all_rows, assumptions_string
-):
-
-    # Compare calculated values with interest amounts from statements
-
-    my_estimate_columns = [
-        col
-        for col in all_rows.columns
-        for y in ["calculated_interest", "calculated_balance_end_of_month"]
-        if col.startswith(y)
-    ]
-
-    my_estimate_of_interest_string = [
-        col for col in my_estimate_columns if ("calculated_interest" in col)
-    ][0]
-
-    all_rows["interest_exactly_matched" + assumptions_string] = all_rows[
-        my_estimate_of_interest_string
-    ] == all_results["interest_applied_from_statement"].str.replace(
-        "£", ""
-    ).str.replace(
-        ",", ""
-    ).astype(
-        float
-    )
-    all_rows["interest_estimate_within_1_percent" + assumptions_string] = (
-        (
-            all_rows[my_estimate_of_interest_string]
-            .str.replace("£", "")
-            .str.replace(",", "")
-            .astype(float)
-            - all_results["calculated_balance_end_of_month"]
-            .str.replace("£", "")
-            .str.replace(",", "")
-            .astype(float)
-        )
-        / all_results["calculated_balance_end_of_month"]
-        .str.replace("£", "")
-        .str.replace(",", "")
-        .astype(float)
-    ).abs().fillna(0) < 0.01
-    all_rows["interest_estimate_within_5_percent" + assumptions_string] = (
-        (
-            all_rows[my_estimate_of_interest_string]
-            .str.replace("£", "")
-            .str.replace(",", "")
-            .astype(float)
-            - all_results["interest_applied_from_statement"]
-            .str.replace("£", "")
-            .str.replace(",", "")
-            .astype(float)
-        )
-        / all_results["interest_applied_from_statement"]
-        .str.replace("£", "")
-        .str.replace(",", "")
-        .astype(float)
-    ).abs().fillna(0) < 0.05
-    return all_rows
+def months_per_tax_year(y):
+    df = pd.DataFrame()
+    year_months = [f"{y}-{x}" for x in range(4, 13)]
+    year_months.extend([f"{y + 1}-{x}" for x in range(1, 4)])
+    df["year_month"] = pd.Series(year_months)
+    df["tax_year"] = y
+    return df
 
 
 def calculate_balances_and_interest_added(
@@ -103,97 +55,82 @@ def calculate_balances_and_interest_added(
     assumptions_string,
 ):
 
-    start_balance = 0
-    all_rows = pd.DataFrame()
-    for row in df.itertuples():
-        daily_interest = (1 + row.interest) ** (1 / get_days(row.Year))
-        days_this_month = monthrange(row.Year, months_dict[row.monthname])[1]
-        if pd.isnull(start_balance):
-            start_balance = 0
-        if not pd.isnull(row.BorrowDate):
-            borrow_day = row.BorrowDate.day
-            interest1 = start_balance * (daily_interest ** (borrow_day)) - start_balance
-            interest2 = (
-                (start_balance + interest1 + row.BorrowAmount)
-                * (daily_interest ** (days_this_month - borrow_day))
-                - row.BorrowAmount
-                - start_balance
-                - interest1
-            )
-            # total_interest = np.floor((interest1 + interest2)*100)/100
-            total_interest = interest1 + interest2
-            total_interest_rounded = round(total_interest, 2)
-            start_balance = start_balance + total_interest + row.BorrowAmount
-        elif (not pd.isnull(row.PayDate)) or (
-            not pd.isnull(row.AverageMonthlyRepaymentOverTaxYear)
-        ):
-            pay_day = row.PayDate.day
-            # If no payday (for example because pay is being divided over the rest of the tax year),
-            # assume payday is 20th
-            # Otherwise make assumptions about which pay day they were using when distributing payments
-            # evenly over the tax year up until tax year 2019-2020
-            if pd.isnull(pay_day):
-                pay_day = 20
-            if (assume_pay == "first") and (row.TaxYear < 2019):
-                pay_day = 1
-            if (assume_pay == "last") and (row.TaxYear < 2019):
-                pay_day = monthrange(row.Year, row.monthnum)[1]
-            interest1 = start_balance * (daily_interest ** (pay_day)) - start_balance
-            if (not applying_logic_from_letter) or (row.TaxYear > 2018):
-                interest2 = (
-                    (start_balance + interest1 + row.RepaidAmount)
-                    * (daily_interest ** (days_this_month - pay_day))
-                    - row.RepaidAmount
-                    - start_balance
-                    - interest1
-                )
-            else:
-                interest2 = (
-                    (start_balance + interest1 + row.AverageMonthlyRepaymentOverTaxYear)
-                    * (daily_interest ** (days_this_month - pay_day))
-                    - row.AverageMonthlyRepaymentOverTaxYear
-                    - start_balance
-                    - interest1
-                )
+    if payments_divided_equally_over_tax_year:
 
-            total_interest = interest1 + interest2
-            total_interest_rounded = round(total_interest, 2)
-            if (not applying_logic_from_letter) or (row.TaxYear > 2018):
-                start_balance = start_balance + total_interest + row.RepaidAmount
-            else:
-                start_balance = (
-                    start_balance
-                    + total_interest
-                    + row.AverageMonthlyRepaymentOverTaxYear
-                )
-        else:
-            total_interest = (
-                start_balance * (daily_interest ** (days_this_month)) - start_balance
+        events["financial_year"] = events.index.map(
+            lambda x: x.year if (x.month > 4 and x.day > 5) else x.year - 1
+        )
+
+        pre_2019 = events[events.financial_year < 2019]
+        post_2019 = events[events.financial_year >= 2019]
+
+        pre_2019_neg = pre_2019[pre_2019["balance_change"] < 0]
+        pre_2019_pos = pre_2019[pre_2019["balance_change"] > 0]
+
+        average_monthly_repayment = (
+            pre_2019_neg.groupby(["financial_year"]).sum()["balance_change"] / 12
+        )
+
+        repayments_averaged_over_tax_year = pd.DataFrame()
+        for y in average_monthly_repayment.index:
+            df = months_per_tax_year(y)
+            df["balance_change"] = average_monthly_repayment[y]
+            repayments_averaged_over_tax_year = repayments_averaged_over_tax_year.append(
+                df
             )
-            total_interest_rounded = round(total_interest, 2)
-            start_balance = start_balance + total_interest
+
+        repayments_averaged_over_tax_year.set_index(["tax_year"], inplace=True)
+
+        repayments_averaged_over_tax_year["date"] = pd.to_datetime(
+            repayments_averaged_over_tax_year["year_month"]
+            + "-"
+            + str(assume_payment_made_day_of_month),
+            format="%Y-%m-%d",
+        )
+        repayments_averaged_over_tax_year = repayments_averaged_over_tax_year.set_index(
+            ["date"]
+        )
+
+        events = repayments_averaged_over_tax_year.append([pre_2019_pos, post_2019])
+        events.sort_index(inplace=True)
+
+    earliest_date = min(min(events.index), min(interest_rates.index))
+    latest_date = max(max(events.index), max(interest_rates.index))
+
+    daily = pd.date_range(earliest_date, latest_date, freq="D")
+
+    df_daily = events.reindex(daily)
+    interest_rates = interest_rates.reindex(daily)
+
+    df_daily["balance_change"] = df_daily["balance_change"].fillna(0)
+    df_daily["rate"] = interest_rates["rate"].fillna(method="ffill")
+
+    all_rows = pd.DataFrame()
+
+    yesterday_balance = 0
+
+    for row in df_daily.itertuples():
+        daily_interest_rate = (1 + (row.rate) / 100) ** (
+            1 / get_days(row.Index.year)
+        ) - 1
+
+        interest_added_today = yesterday_balance * daily_interest_rate
+
+        balance = yesterday_balance + row.balance_change + interest_added_today
 
         this_row = pd.DataFrame(
             {
-                "Year": [row.Year],
-                "Month": [row.Month],
-                "calculated_interest" + assumptions_string: [total_interest_rounded],
-                "calculated_balance_end_of_month" + assumptions_string: [start_balance],
+                "date": [row.Index],
+                "payments": row.balance_change,
+                "annual_interest_rate": row.rate,
+                "calculated_daily_interest"
+                + assumptions_string: [interest_added_today],
+                "calculated_balance" + assumptions_string: [balance],
             }
         )
         all_rows = pd.concat([all_rows, this_row])
 
-    all_rows.reset_index(drop=True, inplace=True)
+        yesterday_balance = balance
 
-    my_estimate_columns = [
-        col
-        for col in all_rows.columns
-        for y in ["calculated_interest", "calculated_balance_end_of_month"]
-        if col.startswith(y)
-    ]
-
-    for col in my_estimate_columns:
-        all_rows[col].values[0] = 0
-        all_rows[col] = all_rows[col].map("£{:,.2f}".format)
-
+    all_rows.columns = [col + assumptions_string for col in all_rows.columns]
     return all_rows

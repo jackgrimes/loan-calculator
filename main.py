@@ -1,9 +1,10 @@
 import os
 
+import pandas as pd
+
 from configs import data_path
 from utils import (
     calculate_balances_and_interest_added,
-    compare_my_interest_estimates_with_reported,
     get_and_prep_data,
 )
 
@@ -15,8 +16,12 @@ def loan_calculator_runner():
     # 1. getting paid on first day of the month, pay over the tax year being averaged
     # 2. evenly distributed over the months of the tax year
 
+    # todo: payment on last day of month
+
+    list_of_dfs = []
+
     for payments_divided_equally_over_tax_year in [False, True]:
-        for assume_payment_made_day_of_month in [None, "first", "last"]:
+        for assume_payment_made_day_of_month in [1, 20]:
             assumptions_string = (
                 ""
                 + payments_divided_equally_over_tax_year
@@ -24,20 +29,21 @@ def loan_calculator_runner():
                 + "_assume_pay_"
                 + str(assume_payment_made_day_of_month)
             )
-            _ = calculate_balances_and_interest_added(
-                events, interest_rates,
-                payments_divided_equally_over_tax_year,
-                assume_payment_made_day_of_month,
-                assumptions_string,
+            list_of_dfs.append(
+                calculate_balances_and_interest_added(
+                    events,
+                    interest_rates,
+                    payments_divided_equally_over_tax_year,
+                    assume_payment_made_day_of_month,
+                    assumptions_string,
+                )
             )
 
-            res = compare_my_interest_estimates_with_reported(
-                # all_results, this_assumption_set_results, assumptions_string
-            )
+    all_calculations = pd.concat(list_of_dfs, axis=1)
 
-            # all_results = pd.merge(all_results, all_rows, on=["Year", "Month"])
+    # todo: add in reported interest added and balances
 
-    res.to_csv(
+    all_calculations.to_csv(
         os.path.join(data_path, "calculated_balances_under_various_assumptions.csv",),
         encoding="utf-8-sig",
         index=False,
