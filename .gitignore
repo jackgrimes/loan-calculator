@@ -133,3 +133,5 @@ dmypy.json
 
 *.csv
 !example_input.csv
+
+configs.py
