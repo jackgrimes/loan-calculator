@@ -159,9 +159,8 @@ def calculate_balances_and_interest_added(
                 "date": [row.Index],
                 "payments": row.balance_change,
                 "annual_interest_rate": row.rate,
-                "calculated_daily_interest"
-                + assumptions_string: [interest_added_today],
-                "calculated_balance" + assumptions_string: [balance],
+                "calculated_daily_interest": [interest_added_today],
+                "calculated_balance": [balance],
             }
         )
         all_rows = pd.concat([all_rows, this_row])
