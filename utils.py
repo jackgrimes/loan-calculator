@@ -7,10 +7,6 @@ import pandas as pd
 
 from configs import data_path, loan
 
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(message)s", datefmt="%d-%b-%y %H:%M:%S"
-)
-
 
 def get_days(year):
     DATE_END = datetime.date(year, 12, 31)
@@ -20,7 +16,7 @@ def get_days(year):
 
 def get_and_prep_data():
     # Read in and clean up data
-    logging.info("Reading data")
+    logging.info("Reading data...")
     events = pd.read_csv(
         os.path.join(data_path, loan, "inputs", "loan_events.csv"),
         dayfirst=True,
@@ -57,7 +53,7 @@ def months_per_tax_year(y):
 def convert_floats_to_2_dps(df):
     for col in df.columns:
         if df.dtypes[col] == float:
-            df[col] = df[col].apply(lambda x: round(x, ndigits=2))
+            df[col] = df[col].map(lambda x: "%.2f" % x)
     return df
 
 
@@ -76,7 +72,7 @@ def calculate_balances_and_interest_added(
         + ("_assume_pay_" + str(assume_payment_made_day_of_month))
     )
 
-    logging.info(f"Doing {assumptions_string}")
+    logging.info(f"Doing {assumptions_string}...")
 
     if payments_divided_equally_over_tax_year:
 
@@ -98,8 +94,8 @@ def calculate_balances_and_interest_added(
         for y in average_monthly_repayment.index:
             df = months_per_tax_year(y)
             df["balance_change"] = average_monthly_repayment[y]
-            repayments_averaged_over_tax_year = repayments_averaged_over_tax_year.append(
-                df
+            repayments_averaged_over_tax_year = (
+                repayments_averaged_over_tax_year.append(df)
             )
 
         repayments_averaged_over_tax_year.set_index(["tax_year"], inplace=True)
@@ -113,8 +109,8 @@ def calculate_balances_and_interest_added(
             repayments_averaged_over_tax_year["date"] = pd.to_datetime(
                 repayments_averaged_over_tax_year["year_month"] + "-" + days.astype(str)
             )
-            repayments_averaged_over_tax_year = repayments_averaged_over_tax_year.set_index(
-                ["date"]
+            repayments_averaged_over_tax_year = (
+                repayments_averaged_over_tax_year.set_index(["date"])
             )
         else:
             repayments_averaged_over_tax_year["date"] = pd.to_datetime(
@@ -123,8 +119,8 @@ def calculate_balances_and_interest_added(
                 + str(assume_payment_made_day_of_month),
                 format="%Y-%m-%d",
             )
-            repayments_averaged_over_tax_year = repayments_averaged_over_tax_year.set_index(
-                ["date"]
+            repayments_averaged_over_tax_year = (
+                repayments_averaged_over_tax_year.set_index(["date"])
             )
 
         events = repayments_averaged_over_tax_year.append([pre_2019_pos, post_2019])
@@ -182,6 +178,7 @@ def clean_up_overall_df(df):
 
 
 def compare_with_reported_interest(df):
+    logging.info("Comparing monthly interests...")
     df = df.set_index("date")
     df = df[
         [col for col in df.columns if (col.startswith("calculated_daily_interest"))]
@@ -226,11 +223,14 @@ def compare_with_reported_interest(df):
 
 
 def compare_with_reported_balances(df):
+    logging.info("Comparing balances...")
     df = df.set_index("date")
     df = df[[col for col in df.columns if (col.startswith("calculated_balance_"))]]
     reported_balances = pd.read_csv(
-        os.path.join(data_path, loan, "inputs", "reported_balances.csv"),
-        parse_dates=True,
+        os.path.join(data_path, loan, "inputs", "reported_balances.csv")
+    )
+    reported_balances["date"] = pd.to_datetime(
+        reported_balances["date"], format="%d/%m/%Y"
     )
 
     reported_balances["date"] = pd.to_datetime(reported_balances["date"])
@@ -247,3 +247,18 @@ def compare_with_reported_balances(df):
             data_path, loan, "outputs", "comparison_calculated_reported_balances.csv"
         ),
     )
+
+
+def output_all_calculations(all_calculations):
+    all_calculations.to_csv(
+        os.path.join(
+            data_path,
+            loan,
+            "outputs",
+            "calculated_balances_under_various_assumptions.csv",
+        ),
+        encoding="utf-8-sig",
+        index=False,
+        float_format="%.2f",
+    )
+    logging.info(f"Done!")

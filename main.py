@@ -7,6 +7,8 @@ from configs import (
     loan,
     payments_divided_equally_over_tax_year_list,
     paydays_if_allocating_pay_evenly_over_tax_year,
+    comparing_interests,
+    comparing_balances,
 )
 from utils import (
     calculate_balances_and_interest_added,
@@ -15,6 +17,12 @@ from utils import (
     compare_with_reported_interest,
     compare_with_reported_balances,
     convert_floats_to_2_dps,
+    output_all_calculations,
+)
+import logging
+
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(message)s", datefmt="%d-%b-%y %H:%M:%S"
 )
 
 
@@ -56,22 +64,13 @@ def loan_calculator_runner():
 
     all_calculations = clean_up_overall_df(all_calculations)
 
-    compare_with_reported_interest(all_calculations)
+    if comparing_interests:
+        compare_with_reported_interest(all_calculations)
 
-    compare_with_reported_balances(all_calculations)
+    if comparing_balances:
+        compare_with_reported_balances(all_calculations)
 
-    all_calculations = convert_floats_to_2_dps(all_calculations)
-
-    all_calculations.to_csv(
-        os.path.join(
-            data_path,
-            loan,
-            "outputs",
-            "calculated_balances_under_various_assumptions.csv",
-        ),
-        encoding="utf-8-sig",
-        index=False,
-    )
+    output_all_calculations(all_calculations)
 
 
 if __name__ == "__main__":
